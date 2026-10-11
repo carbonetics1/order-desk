@@ -1,0 +1,701 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><style>:root{box-sizing:border-box}body{margin:0;padding:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Carbonetics Order Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: one working column, like a parts-counter terminal. Carbon header strip, the conversation, and a composer pinned to the bottom. */
+:root {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --ink: #15181d;
+  --muted: #5d6570;
+  --line: #dde1e6;
+  --accent: #d0102a;
+  --button: #15181d;
+  --button-ink: #ffffff;
+  --header-bg: #121418;
+  --header-ink: #f1f3f6;
+  --header-muted: #a3abb6;
+  --good: #19784a;   --good-bg: #e3f3ea;
+  --warn: #9a5b00;   --warn-bg: #fbefd9;
+  --bad: #b42332;    --bad-bg: #fbe4e6;
+  --info: #24539c;   --info-bg: #e3ecfa;
+  --calm: #4f5864;   --calm-bg: #eceef2;
+  --focus: #d0102a;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0f12; --surface: #15181d; --surface-2: #1b1f25; --ink: #eceff3; --muted: #9aa3ae; --line: #2a3038;
+    --accent: #ff3b4f; --button: #eceff3; --button-ink: #111317;
+    --good: #4cc98a; --good-bg: #12291e; --warn: #f0aa45; --warn-bg: #2d2311; --bad: #ff7b84; --bad-bg: #321619;
+    --info: #7fb0ff; --info-bg: #142035; --calm: #b3bcc7; --calm-bg: #20252c; --focus: #ff3b4f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0f12; --surface: #15181d; --surface-2: #1b1f25; --ink: #eceff3; --muted: #9aa3ae; --line: #2a3038;
+  --accent: #ff3b4f; --button: #eceff3; --button-ink: #111317;
+  --good: #4cc98a; --good-bg: #12291e; --warn: #f0aa45; --warn-bg: #2d2311; --bad: #ff7b84; --bad-bg: #321619;
+  --info: #7fb0ff; --info-bg: #142035; --calm: #b3bcc7; --calm-bg: #20252c; --focus: #ff3b4f;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+*, *::before, *::after { box-sizing: border-box; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.app { min-height: 100%; display: flex; flex-direction: column; }
+
+/* Header: carbon twill strip, the same in both themes. */
+.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background-color: var(--header-bg);
+  background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.035) 0 3px, transparent 3px 6px), repeating-linear-gradient(-45deg, rgba(255,255,255,.025) 0 3px, transparent 3px 6px);
+  color: var(--header-ink); border-bottom: 2px solid var(--accent);
+}
+.bar-in { max-width: 920px; margin: 0 auto; padding-block: 12px; padding-inline: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand b { font-family: var(--font-display); font-weight: 700; letter-spacing: .14em; font-size: 15px; }
+.brand span { font-family: var(--font-display); font-weight: 600; font-size: 19px; letter-spacing: .02em; color: var(--header-ink); }
+.brand i { width: 8px; height: 8px; background: var(--accent); display: inline-block; transform: skewX(-18deg); }
+.fresh { margin-left: auto; font-size: 13px; color: var(--header-muted); }
+.ghost { background: transparent; border: 1px solid rgba(255,255,255,.25); color: var(--header-ink); border-radius: 6px; padding: 3px 10px; font-size: 13px; cursor: pointer; }
+.ghost:hover { border-color: rgba(255,255,255,.55); }
+
+main { flex: 1; width: 100%; max-width: 920px; margin: 0 auto; padding-block: 20px 8px; padding-inline: 16px; }
+
+/* Lock screen */
+.lock { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); align-items: start; }
+@media (max-width: 760px) { .lock { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0; }
+.panel h1 { font-family: var(--font-display); font-weight: 700; font-size: 26px; line-height: 1.15; margin: 0 0 6px; text-wrap: balance; }
+.panel p { margin: 0 0 14px; color: var(--muted); }
+.field { display: grid; gap: 6px; margin-bottom: 12px; }
+.field label { font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.field input[type="password"], .field input[type="text"] { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); margin-bottom: 14px; }
+.primary { background: var(--button); color: var(--button-ink); border: 0; border-radius: 8px; padding: 10px 18px; font-weight: 600; cursor: pointer; }
+.primary:disabled { opacity: .55; cursor: progress; }
+.err { color: var(--bad); font-size: 14px; margin: 10px 0 0; min-height: 1.5em; }
+.eyebrow { font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+
+/* Conversation */
+.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.msg { display: grid; gap: 8px; min-width: 0; scroll-margin-top: 84px; }
+.msg.me { justify-items: end; }
+.me .bubble { background: var(--button); color: var(--button-ink); border-radius: 14px 14px 4px 14px; padding: 8px 14px; max-width: min(560px, 90%); overflow-wrap: anywhere; }
+.bot { display: grid; gap: 10px; min-width: 0; }
+.say { margin: 0; max-width: 68ch; }
+.say strong { font-weight: 600; }
+.banner { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
+
+/* Chips */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: 14px; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }
+.chip:hover { border-color: var(--muted); }
+.chip .n { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Pills */
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 2px 10px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.t-good { color: var(--good); background: var(--good-bg); }
+.t-warn { color: var(--warn); background: var(--warn-bg); }
+.t-bad { color: var(--bad); background: var(--bad-bg); }
+.t-info { color: var(--info); background: var(--info-bg); }
+.t-calm { color: var(--calm); background: var(--calm-bg); }
+
+/* Order card */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0; }
+.card-top { padding: 16px 18px 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
+.card-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ono { font-family: var(--font-mono); font-size: 22px; letter-spacing: -.01em; }
+.meta { color: var(--muted); font-size: 14px; }
+.items { list-style: none; margin: 0; padding: 0; }
+.items li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 18px; border-bottom: 1px solid var(--line); }
+.items .name { min-width: 0; overflow-wrap: anywhere; }
+.items li .pill { align-self: start; justify-self: end; }
+.items .sku { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 18px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.fact { min-width: 0; }
+.fact dt { font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.fact dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.mono { font-family: var(--font-mono); font-size: 13px; }
+.block { padding: 14px 18px; display: grid; gap: 6px; border-bottom: 1px solid var(--line); }
+.block:last-child { border-bottom: 0; }
+.block h3 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.block p { margin: 0; max-width: 72ch; }
+.reply { background: var(--surface-2); }
+.reply-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.reply-row p { flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
+.copy { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 5px 12px; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
+.copy:hover { border-color: var(--muted); }
+.links { display: flex; gap: 16px; flex-wrap: wrap; padding: 10px 18px 14px; font-size: 14px; }
+a { color: var(--info); }
+
+/* Order lists */
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.list-head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.list-head h2 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+.list-head span { color: var(--muted); font-size: 14px; }
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows li + li { border-top: 1px solid var(--line); }
+.row { width: 100%; text-align: left; background: transparent; border: 0; padding: 10px 16px; display: grid; grid-template-columns: 78px 72px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; cursor: pointer; }
+.row:hover { background: var(--surface-2); }
+.row .ono { font-size: 14px; }
+.row .days { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.row .what { min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.row .what .it { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
+.more { width: 100%; border: 0; border-top: 1px solid var(--line); background: var(--surface-2); padding: 10px; cursor: pointer; font-weight: 600; }
+
+/* Composer */
+.composer { position: sticky; bottom: 0; z-index: 4; background: var(--bg); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.composer .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.composer .chips::-webkit-scrollbar { display: none; }
+.composer .chip { flex: none; }
+.composer-in { max-width: 920px; margin: 0 auto; padding-block: 10px 12px; padding-inline: 16px; display: grid; gap: 10px; }
+.ask { display: flex; gap: 8px; }
+.ask input { flex: 1; min-width: 0; padding: 11px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.ask button { flex: none; }
+.hint { color: var(--muted); font-size: 13px; }
+
+@media (max-width: 520px) {
+  .row { grid-template-columns: 70px minmax(0, 1fr); }
+  .row .days { text-align: left; grid-column: 1; }
+  .row .what { grid-column: 2; grid-row: 1 / span 2; }
+  .fresh { margin-left: 0; width: 100%; order: 3; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .msg { animation: rise .18s ease-out both; }
+  @keyframes rise { from { transform: translateY(4px); } to { transform: none; } }
+}
+</style>
+
+<div class="app">
+  <header class="bar">
+    <div class="bar-in">
+      <div class="brand"><i aria-hidden="true"></i><b>CARBONETICS</b><span>Order Desk</span></div>
+      <span class="fresh" id="fresh">Order status for staff</span>
+      <button class="ghost" id="lockBtn" type="button" hidden>Lock</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="lock" id="lock" aria-labelledby="lockTitle">
+      <form class="panel" id="unlock" autocomplete="off">
+        <h1 id="lockTitle">Where's my order?</h1>
+        <p>Look up any order, open or past, by order number, product, manifest or list. Enter the staff passcode to start.</p>
+        <div class="field">
+          <label for="pass">Staff passcode</label>
+          <input id="pass" name="pass" type="password" autocomplete="current-password" required>
+        </div>
+        <label class="check"><input type="checkbox" id="remember"> Remember on this device</label>
+        <button class="primary" id="unlockBtn" type="submit">Open the desk</button>
+        <p class="err" id="lockErr" role="alert"></p>
+      </form>
+      <div>
+        <p class="eyebrow">Example answer</p>
+        <article class="card example" aria-label="Example answer">
+          <div class="card-top">
+            <div class="card-title"><span class="ono">#11xxx</span><span class="pill t-calm">With supplier</span><span class="pill t-good">On track</span></div>
+            <div class="meta">Ordered 16 Aug 2026 · 54 days ago · window ends 13 Dec 2026</div>
+          </div>
+          <ul class="items"><li><span class="name">GT Style Rear Spoiler For Toyota GR Yaris (Carbon Fibre)</span><span class="pill t-calm">Waiting</span><span class="sku">EXAMPLE-SKU</span></li></ul>
+          <dl class="facts"><div class="fact"><dt>Manifest</dt><dd>K15</dd></div><div class="fact"><dt>ETA</dt><dd>No arrival date on file for K15</dd></div></dl>
+          <div class="block"><h3>Next step</h3><p>On K15, not arrived in Shopify yet.</p></div>
+          <div class="block reply"><h3>Tell the customer</h3><div class="reply-row"><p>Your order is in production and still within our usual 60–120 day timeframe. We'll update you as soon as it's ready to send.</p></div></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="desk" hidden>
+      <div class="banner" id="banner" hidden></div>
+      <ol class="log" id="log" aria-live="polite"></ol>
+    </section>
+  </main>
+
+  <footer class="composer" id="composer" hidden>
+    <div class="composer-in">
+      <div class="chips" id="quick"></div>
+      <form class="ask" id="askForm" autocomplete="off">
+        <input id="q" type="text" aria-label="Ask about an order" placeholder="Order number, product, manifest, or a list like late orders" enterkeyhint="search">
+        <button class="primary" type="submit">Ask</button>
+      </form>
+    </div>
+  </footer>
+</div>
+
+<script>
+/*ENGINE-START*/
+function makeEngine(data) {
+  const orders = data.orders;
+  const byNum = new Map(orders.map((r) => [r.o.replace(/\D/g, ''), r]));
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9#]+/g, ' ').trim();
+  const hay = new Map(orders.map((r) => [r, ' ' + norm(r.it.map((i) => i.t + ' ' + i.s + ' ' + i.v).join(' ')) + ' ']));
+  const OPEN = (r) => r.g !== 'sent' && r.g !== 'cleanup' && r.g !== 'archived';
+  const RECENT = (data.meta && data.meta.recent_days) || 30;
+  // "including sent and closed", "history": search older orders too.
+  const WIDE = /\b(?:inc|incl|including|plus) (?:(?:sent|closed|cancelled|old|older|and|or) ?)+(?:orders? )?|\b(?:history|all time)\b/;
+  const manifests = new Set(orders.flatMap((r) => r.mf));
+  const LISTS = [
+    { re: /\b(not counted|clean ?up|nothing left|close in shopify)\b/, test: (r) => r.g === 'cleanup', title: 'Open but not counted', sort: 'old', scope: 'all' },
+    { re: /\b(supplier (has )?(shipped|sent)|drop ?ship(ped)? tracking|add tracking|tracking not in shopify)\b/, test: (r) => r.g === 'supplier_shipped', title: 'Shipped by a supplier, tracking not in Shopify yet', sort: 'old' },
+    { re: /\b(supplier says arrived|says arrived|kzt arrived|receive the po)\b/, test: (r) => r.g === 'supplier_arrived', title: 'Supplier says arrived, not in Shopify yet', sort: 'old' },
+    { re: /\b(part(ly|ially)? arrived|partial(ly)?)\b/, test: (r) => r.g === 'part', title: 'Part arrived', sort: 'old' },
+    { re: /\b(ready( to (send|ship|go|pick|collect))?|in stock|on the shelf|to pick|pick list|arrived)\b/, test: (r) => r.g === 'ready', title: 'Ready to send', sort: 'old' },
+    { re: /\b(on a po|incoming|purchase orders?|arriving|po)\b/, test: (r) => r.g === 'po', title: 'Arriving on a PO', sort: 'old' },
+    { re: /\b(not on (any|a) (supplier )?sheet|no (supplier )?sheet|not ordered|never ordered)\b/, test: (r) => r.g === 'no_sheet', title: 'Not on any supplier sheet', sort: 'old' },
+    { re: /\b(new orders?|this week|placed today)\b/, test: (r) => r.d < 7 && OPEN(r), title: 'Placed in the last 7 days', sort: 'new' },
+    { re: /\b(sent|shipped|dispatched|fulfilled|collected)\b/, test: (r) => r.g === 'sent', title: `Sent in the last ${RECENT} days`, sort: 'recent', scope: 'sent' },
+  ];
+  const WINDOWS = [
+    { re: /\b(over a year|year old|oldest)\b/, test: (r) => r.w === 'Over a year', title: 'Over a year old' },
+    { re: /\b(late|overdue|past (the |their )?window|behind)\b/, test: (r) => r.w === 'Late' || r.w === 'Over a year', title: 'Past their window' },
+    { re: /\b(due soon|coming due|nearly late)\b/, test: (r) => r.w === 'Due soon', title: 'Due soon' },
+  ];
+  const EXTRA = [
+    { re: /\b(pick ?ups?|collections?|to collect)\b/, test: (r) => r.mt === 'Pickup', title: 'Pickup' },
+    { re: /\b(balance|owing|unpaid)\b/, test: (r) => /owing/.test(r.pay), title: 'Balance owing' },
+  ];
+  const STOP = new Set(('the a an of for on in to is are was were be what whats where wheres who whos which with and or me my our us show list find give get any all please ' +
+    'orders order status update updates eta about at by it its this that there have has been do does did can could you your tell check look up waiting wait ' +
+    'customer customers part parts item items how many much when will i we anyone someone their them they from number still yet now today s').split(' '));
+  const ALT = { bonnet: ['bonnet', 'hood'], hood: ['hood', 'bonnet'], wing: ['wing', 'spoiler'], spoiler: ['spoiler', 'wing'], guard: ['guard', 'fender'], fender: ['fender', 'guard'],
+    boot: ['boot', 'trunk'], trunk: ['trunk', 'boot'], fibre: ['fibre', 'fiber'], fiber: ['fiber', 'fibre'], grill: ['grill', 'grille'], grille: ['grille', 'grill'], cf: ['carbon'] };
+  const alts = (t) => {
+    const out = new Set(ALT[t] || [t]);
+    if (t.length > 3 && t.endsWith('s') && !t.endsWith('ss')) (ALT[t.slice(0, -1)] || [t.slice(0, -1)]).forEach((x) => out.add(x));
+    return [...out];
+  };
+  const strip = (s, re) => s.replace(new RegExp(re.source, 'g'), ' ');
+  const matches = (r, tokens) => tokens.every((t) => alts(t).some((a) => hay.get(r).includes(a)));
+  const SORTS = {
+    old: (a, b) => b.d - a.d,
+    new: (a, b) => a.d - b.d || Number(b.o.slice(1)) - Number(a.o.slice(1)),
+    recent: (a, b) => ((b.tr[0] && b.tr[0].dt) || '').localeCompare((a.tr[0] && a.tr[0].dt) || '') || Number(b.o.slice(1)) - Number(a.o.slice(1)),
+  };
+
+  function ask(raw) {
+    const q = ' ' + norm(raw).replace(/#/g, ' # ') + ' ';
+    if (!q.trim() || /^\s*(help|hi|hello|hey|what can you do|how does this work)\s*$/.test(q)) return { type: 'help' };
+
+    // Order numbers first.
+    // A bare year next to other words ("1999-2002 R34 lip") is a fitment year, not an order number.
+    const words = norm(raw).split(' ').filter((w) => w && w !== '#' && !/^\d+$/.test(w) && !STOP.has(w));
+    const nums = [...new Set([...String(raw).matchAll(/(?:^|[^\dA-Za-z])(#?)\s?(\d{4,5})(?![\d])/g)]
+      .filter((m) => m[1] === '#' || !(words.length && +m[2] >= 1985 && +m[2] <= 2035)).map((m) => m[2]))];
+    if (nums.length) {
+      const found = nums.map((n) => byNum.get(n)).filter(Boolean);
+      const missing = nums.filter((n) => !byNum.has(n));
+      return { type: 'orders_by_number', found: found.slice(0, 6), missing };
+    }
+
+    // Tracking numbers.
+    const trk = (String(raw).match(/[A-Za-z0-9]{8,}/g) || []).filter((w) => (w.match(/\d/g) || []).length >= 5).map((w) => w.toUpperCase());
+    if (trk.length) {
+      const hits = orders.filter((r) => trk.some((t) => r.tr.some((x) => x.n && x.n.toUpperCase() === t) || (r.st && r.st.n && r.st.n.toUpperCase() === t)));
+      if (hits.length) return { type: 'list', title: `Tracking ${trk.join(', ')}`, ids: hits };
+    }
+
+    let rest = q;
+    const filters = [];
+    const titles = [];
+    let sort = 'old';
+    let scope = 'open';
+
+    // A manifest, if one by that name exists.
+    // K15, N10 (E's orders) and Z56 (KZT batches), the same names as the warehouse bins.
+    const km = q.match(/\b(k|e|z)\s*(?:order|record)?\s*#?\s*(\d{1,2})\b/) || q.match(/\b(n)(\d{1,2})\b/);
+    if (km) {
+      const label = ({ k: 'K', e: 'N', n: 'N', z: 'Z' })[km[1]] + km[2];
+      if (manifests.has(label)) { filters.push((r) => r.mf.includes(label)); titles.push('On ' + label); rest = rest.replace(km[0], ' '); }
+    }
+    if (/\bkzt\b/.test(rest) && !/\bkzt arrived\b/.test(rest)) {
+      filters.push((r) => r.mf.some((m) => /^Z\d+$/.test(m) || m === 'KZT Main Order Sheet') || /\bKZT\b/.test(r.ds)); titles.push('With KZT'); rest = rest.replace(/\bkzt\b/, ' ');
+    }
+    let wide = false;
+    if (WIDE.test(rest)) { wide = true; rest = strip(rest, WIDE); }
+    const list = LISTS.find((l) => l.re.test(rest));
+    if (list) { filters.push(list.test); titles.unshift(list.title); sort = list.sort; if (list.scope) scope = list.scope; rest = strip(rest, list.re); }
+    for (const w of WINDOWS) if (w.re.test(rest)) { filters.push(w.test); titles.push(w.title); rest = strip(rest, w.re); break; }
+    for (const x of EXTRA) if (x.re.test(rest)) { filters.push(x.test); titles.push(x.title); rest = strip(rest, x.re); }
+
+    const tokens = rest.split(' ').filter((t) => t && t !== '#' && !STOP.has(t) && (t.length > 1 || /\d/.test(t)));
+    if (!filters.length && !tokens.length) return { type: 'none' };
+    if (wide && scope === 'open') { scope = 'all'; titles.push('Including sent and closed'); }
+
+    // Sent and closed orders that would also match, so the answer can offer them.
+    let hidden = 0;
+    if (scope === 'open') {
+      let other = orders.filter((r) => !OPEN(r));
+      for (const f of filters) other = other.filter(f);
+      if (tokens.length) other = other.filter((r) => matches(r, tokens));
+      hidden = other.length;
+    }
+
+    let pool = orders.filter((r) => (scope === 'sent' ? r.g === 'sent' : scope === 'all' ? true : OPEN(r)));
+    for (const f of filters) pool = pool.filter(f);
+    let close = false;
+    if (tokens.length) {
+      let hit = pool.filter((r) => matches(r, tokens));
+      if (!hit.length && tokens.length >= 3) {
+        hit = pool.filter((r) => tokens.filter((t) => alts(t).some((a) => hay.get(r).includes(a))).length >= tokens.length - 1);
+        close = hit.length > 0;
+      }
+      pool = hit;
+      titles.push((close ? 'Close to “' : 'Matching “') + tokens.join(' ') + '”');
+    }
+    pool.sort(SORTS[sort] || SORTS.old);
+    return { type: 'list', title: titles.join(' · '), ids: pool, scope, hidden, wider: hidden ? String(raw).trim() + ' including sent and closed' : '' };
+  }
+
+  function counts() {
+    const c = (t) => orders.filter(t).length;
+    return {
+      ready: c((r) => r.g === 'ready'), po: c((r) => r.g === 'po'), part: c((r) => r.g === 'part'),
+      supplier_arrived: c((r) => r.g === 'supplier_arrived'), supplier_shipped: c((r) => r.g === 'supplier_shipped'),
+      late: c((r) => r.w === 'Late' || r.w === 'Over a year'), due_soon: c((r) => r.w === 'Due soon'),
+      no_sheet: c((r) => r.g === 'no_sheet'), sent: c((r) => r.g === 'sent'), open: c(OPEN), archived: c((r) => r.g === 'archived'),
+    };
+  }
+  return { ask, counts, get: (n) => byNum.get(String(n).replace(/\D/g, '')) };
+}
+/*ENGINE-END*/
+
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const KEY = 'orderdesk.pass';
+  const store = {
+    get() { try { return localStorage.getItem(KEY); } catch (e) { return null; } },
+    set(v) { try { localStorage.setItem(KEY, v); } catch (e) { /* not kept */ } },
+    clear() { try { localStorage.removeItem(KEY); } catch (e) { /* nothing */ } },
+  };
+  let engine = null;
+  let data = null;
+
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const tz = 'Australia/Sydney';
+  const fmtDay = (iso) => (iso ? new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso.length === 10 ? iso + 'T12:00:00+10:00' : iso)) : '');
+  const fmtStamp = (iso) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+
+  const STAGE_TONE = { ready: 't-good', sent: 't-good', po: 't-info', part: 't-warn', supplier_arrived: 't-warn', supplier_shipped: 't-warn', with_supplier: 't-calm', new: 't-calm', brand: 't-calm', no_sheet: 't-bad', cleanup: 't-calm' };
+  const WINDOW_TONE = { 'On track': 't-good', 'Due soon': 't-warn', Late: 't-bad', 'Over a year': 't-bad' };
+  const ARCHIVED_TONE = { Sent: 't-good', Collected: 't-good', Completed: 't-good', 'Check Shopify': 't-warn', 'Not in Shopify': 't-warn' };
+  const ITEM_TONE = { 'In stock': 't-good', Sent: 't-good', Covered: 't-info', 'Supplier shipped': 't-warn', Waiting: 't-calm', 'Stock not tracked': 't-calm', 'Nothing to send': 't-calm', 'Not sent': 't-calm', Cancelled: 't-calm', 'Check Shopify': 't-warn' };
+  const pill = (text, tone) => el('span', 'pill ' + (tone || 't-calm'), text);
+  const stageTone = (r) => (r.g === 'archived' ? ARCHIVED_TONE[r.gl] || 't-calm' : STAGE_TONE[r.g]);
+  const DONE = (r) => r.g === 'sent' || r.g === 'archived';
+  // Short date for list rows: "14 May" this year, "May 2025" before that.
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const shortDay = (iso) => { const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); return y === new Date().getFullYear() ? d + ' ' + MON[m - 1] : MON[m - 1] + ' ' + y; };
+
+  // ----- unlock -----
+  async function decrypt(env, pass) {
+    const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(env.salt), iterations: env.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    let bytes = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(env.iv) }, key, b64(env.ct)));
+    if (env.z === 'gzip') {
+      if (typeof DecompressionStream === 'undefined') throw new Error('old-browser');
+      const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+      bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+  let envelope = null;
+  async function loadEnvelope() {
+    if (envelope) return envelope;
+    // A standalone copy carries its data inside the page; the hosted page fetches it.
+    const inline = document.getElementById('orders-data');
+    if (inline) { envelope = JSON.parse(inline.textContent); return envelope; }
+    const res = await fetch('data/orders.enc.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('fetch');
+    envelope = await res.json();
+    return envelope;
+  }
+  async function unlock(pass, remember) {
+    const btn = $('unlockBtn');
+    btn.disabled = true; btn.textContent = 'Opening…'; $('lockErr').textContent = '';
+    try {
+      const env = await loadEnvelope();
+      data = await decrypt(env, pass);
+      engine = makeEngine(data);
+      if (remember) store.set(pass);
+      openDesk();
+    } catch (e) {
+      const msg = e && e.message === 'fetch' ? "The order data couldn't be loaded. Check your connection and try again."
+        : e && e.message === 'old-browser' ? 'This browser is too old to open the desk. Update it, or use Chrome, Safari or Edge.'
+        : "That passcode didn't work. Check it with Long and try again.";
+      $('lockErr').textContent = msg;
+      if (!(e && e.message === 'fetch')) store.clear();
+    } finally {
+      btn.disabled = false; btn.textContent = 'Open the desk';
+    }
+  }
+  $('unlock').addEventListener('submit', (e) => { e.preventDefault(); const p = $('pass').value.trim(); if (p) unlock(p, $('remember').checked); });
+  $('lockBtn').addEventListener('click', () => { store.clear(); data = null; engine = null; $('log').textContent = ''; $('desk').hidden = true; $('composer').hidden = true; $('lock').hidden = false; $('lockBtn').hidden = true; $('pass').value = ''; $('fresh').textContent = 'Order status for staff'; });
+
+  // ----- desk -----
+  const QUICK = [
+    ['Ready to send', 'ready to send'], ['Late orders', 'late orders'], ['Due soon', 'due soon'], ['Supplier says arrived', 'supplier says arrived'],
+    ['Not on any sheet', 'not on any supplier sheet'], ['Sent recently', 'sent'], ['Help', 'help'],
+  ];
+  function openDesk() {
+    $('lock').hidden = true; $('desk').hidden = false; $('composer').hidden = false; $('lockBtn').hidden = false;
+    const at = data.meta.at;
+    $('fresh').textContent = 'Updated ' + fmtStamp(at);
+    const ageH = (Date.now() - Date.parse(at)) / 3600000;
+    const notes = [];
+    if (ageH > 17 * 24) notes.push(`This data is from ${fmtStamp(at)}. It's meant to refresh on the 1st and 15th of each month, so the last refresh may not have run. Let Long know.`);
+    if (data.meta.missing && data.meta.missing.length) notes.push('Some supplier sheets couldn\'t be read in the last refresh (' + data.meta.missing.join(', ') + '), so manifest details may be missing.');
+    $('banner').hidden = !notes.length; $('banner').textContent = notes.join(' ');
+    const quick = $('quick'); quick.textContent = '';
+    for (const [label, query] of QUICK) { const b = el('button', 'chip', label); b.type = 'button'; b.addEventListener('click', () => run(query)); quick.appendChild(b); }
+    if (!$('log').children.length) greet();
+    if (matchMedia('(pointer: fine)').matches) $('q').focus();
+  }
+
+  function greet() {
+    const c = engine.counts();
+    const box = el('div', 'bot');
+    const p = el('p', 'say');
+    p.append('Ask me about any order, open or past. Type an order number like ');
+    p.append(el('span', 'mono', '11723'));
+    p.append(', a product like “R34 spoiler”, a manifest like “K15”, “N10” or “Z56”, or a list. Right now there are ');
+    p.append(el('strong', '', c.open.toLocaleString('en-AU') + ' open orders'));
+    p.append(` out of ${(data.meta.on_desk || data.orders.length).toLocaleString('en-AU')} in all.`);
+    box.appendChild(p);
+    const chips = el('div', 'chips');
+    const add = (label, n, query) => { const b = el('button', 'chip'); b.type = 'button'; b.append(label + ' '); b.appendChild(el('span', 'n', String(n))); b.addEventListener('click', () => run(query)); chips.appendChild(b); };
+    add('Ready to send', c.ready, 'ready to send');
+    add('Arriving on a PO', c.po, 'on a po');
+    add('Part arrived', c.part, 'part arrived');
+    add('Supplier says arrived', c.supplier_arrived, 'supplier says arrived');
+    if (c.supplier_shipped) add('Supplier shipped, not in Shopify', c.supplier_shipped, 'supplier shipped');
+    add('Past their window', c.late, 'late orders');
+    add('Due soon', c.due_soon, 'due soon');
+    add('Not on any supplier sheet', c.no_sheet, 'not on any supplier sheet');
+    add(`Sent in the last ${data.meta.recent_days || 30} days`, c.sent, 'sent');
+    box.appendChild(chips);
+    post(box);
+  }
+
+  function post(node, mine) {
+    const li = el('li', 'msg' + (mine ? ' me' : ''));
+    li.appendChild(node);
+    $('log').appendChild(li);
+    if (mine) li.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    return li;
+  }
+  function say(text) { const box = el('div', 'bot'); box.appendChild(el('p', 'say', text)); post(box); }
+
+  function run(query) {
+    if (!engine) return;
+    post(el('div', 'bubble', query), true);
+    const r = engine.ask(query);
+    if (r.type === 'help') return help();
+    if (r.type === 'none') return say("I couldn't find anything for that. Try an order number like 11723, a product like “R34 spoiler”, a manifest like “K15”, or a list like “late orders”.");
+    if (r.type === 'orders_by_number') {
+      for (const o of r.found) post(card(o));
+      if (r.missing.length) {
+        const list = (a) => a.map((n) => '#' + n).join(', ');
+        const are = (a) => (a.length > 1 ? 'are' : 'is');
+        const top = Number(String(data.meta.newest || '').replace(/\D/g, '')) || 0;
+        const absent = new Set(data.meta.absent || []);
+        const newer = r.missing.filter((n) => top && Number(n) > top);
+        const gone = r.missing.filter((n) => !newer.includes(n) && absent.has(Number(n)));
+        const other = r.missing.filter((n) => !newer.includes(n) && !gone.includes(n));
+        if (newer.length) say(`${list(newer)} ${are(newer)} newer than the desk's data: the last order it has is ${data.meta.newest}, as at ${fmtStamp(data.meta.at)}. Check Shopify.`);
+        if (gone.length) say(`Shopify has no order ${list(gone)}: the number was skipped or the order was deleted. Check the number with the customer.`);
+        if (other.length) say(`I can't find ${list(other)}. The desk has every Shopify order${data.meta.oldest ? ' from ' + data.meta.oldest.o : ''} up to the last refresh, so check the number, or look it up in Shopify.`);
+      }
+      return;
+    }
+    if (r.type === 'list') {
+      if (!r.ids.length) {
+        if (r.hidden) return offerWider(`No open orders for ${r.title}. ${r.hidden === 1 ? 'One sent or closed order matches' : r.hidden.toLocaleString('en-AU') + ' sent or closed orders match'}.`, r);
+        return say(`Nothing found for ${r.title}.`);
+      }
+      if (r.ids.length === 1) {
+        say(`One ${r.scope === 'open' ? 'open ' : ''}order: ${r.title}.`);
+        post(card(r.ids[0]));
+        if (r.hidden) offerWider('', r);
+        return;
+      }
+      post(listView(r.title, r.ids, r));
+    }
+  }
+  function widerButton(r) {
+    const b = el('button', 'more', `Show ${r.hidden.toLocaleString('en-AU')} sent or closed too`); b.type = 'button';
+    b.addEventListener('click', () => { b.disabled = true; run(r.wider); });
+    return b;
+  }
+  function offerWider(text, r) {
+    const box = el('div', 'bot');
+    if (text) box.appendChild(el('p', 'say', text));
+    box.appendChild(widerButton(r));
+    post(box);
+  }
+
+  function help() {
+    const box = el('div', 'bot');
+    box.appendChild(el('p', 'say', 'Here’s what you can ask:'));
+    const ul = el('ul', 'say');
+    [
+      ['An order', '11723, #11723, or several at once. Any order works, open or past'],
+      ['A product', 'R34 spoiler, GT86 fender, Maxton'],
+      ['A manifest', 'K15, N10, Z56, or KZT for all of KZT'],
+      ['Sent and closed orders too', 'add “including sent and closed”, as in K15 including sent and closed'],
+      ['A list', 'ready to send, on a PO, part arrived, late orders, due soon, over a year, not on any supplier sheet, sent'],
+      ['Mix them', 'late R34 orders, ready pickups, K15 late'],
+      ['A tracking number', 'any tracking number Shopify or a supplier sheet has'],
+    ].forEach(([a, b]) => { const li = el('li'); li.appendChild(el('strong', '', a + ': ')); li.append(b); ul.appendChild(li); });
+    box.appendChild(ul);
+    box.appendChild(el('p', 'say', `Answers come from Shopify and the supplier sheets as at the date shown at the top. The desk holds every Shopify order. Each refresh, on the 1st and 15th of each month, re-checks open orders and anything changed in the last ${data.meta.recent_days || 60} days; older orders keep their last known status. Check Shopify for anything that may have changed since. The desk never guesses a date: when there is no arrival date on file, it says so. Customer details are left out, so ask customers for their order number.`));
+    post(box);
+  }
+
+  function listView(title, ids, r) {
+    const wrap = el('section', 'list');
+    const head = el('div', 'list-head');
+    head.appendChild(el('h2', '', ids.length.toLocaleString('en-AU') + (r && r.scope === 'open' ? ' open orders' : ' orders')));
+    head.appendChild(el('span', '', title));
+    wrap.appendChild(head);
+    const ul = el('ul', 'rows');
+    const LIMIT = 15;
+    const draw = (all) => {
+      ul.textContent = '';
+      for (const r of (all ? ids : ids.slice(0, LIMIT))) {
+        const li = el('li');
+        const b = el('button', 'row'); b.type = 'button';
+        b.appendChild(el('span', 'ono', r.o));
+        b.appendChild(el('span', 'days', r.g === 'archived' ? (r.ed ? shortDay(r.ed) : '—') : r.g === 'sent' && r.tr[0] ? shortDay(r.tr[0].dt) : r.d + 'd'));
+        const what = el('span', 'what');
+        what.appendChild(pill(r.gl, stageTone(r)));
+        if (r.w) what.appendChild(pill(r.w, WINDOW_TONE[r.w]));
+        what.appendChild(el('span', 'it', r.it.map((i) => i.t).join(' · ') || '—'));
+        b.appendChild(what);
+        b.addEventListener('click', () => { post(el('div', 'bubble', r.o), true); post(card(r)); });
+        li.appendChild(b); ul.appendChild(li);
+      }
+    };
+    draw(false);
+    wrap.appendChild(ul);
+    if (ids.length > LIMIT) {
+      const more = el('button', 'more', `Show all ${ids.length}`); more.type = 'button';
+      more.addEventListener('click', () => { draw(true); more.remove(); });
+      wrap.appendChild(more);
+    }
+    if (r && r.hidden) wrap.appendChild(widerButton(r));
+    return wrap;
+  }
+
+  function fact(dl, label, value) {
+    if (value == null) return;
+    if (!(value instanceof Node) && !String(value).trim()) return;
+    const d = el('div', 'fact');
+    d.appendChild(el('dt', '', label));
+    const dd = el('dd');
+    if (value instanceof Node) dd.appendChild(value); else dd.textContent = value;
+    d.appendChild(dd); dl.appendChild(d);
+  }
+  const trackLink = (t) => {
+    const s = el('span');
+    if (t.c && t.c !== 'Other') s.append(t.c + ' ');
+    const a = el('a', 'mono', t.n); a.href = t.u; a.target = '_blank'; a.rel = 'noopener';
+    s.appendChild(a);
+    return s;
+  };
+
+  function card(r) {
+    const c = el('article', 'card');
+    const top = el('div', 'card-top');
+    const t = el('div', 'card-title');
+    t.appendChild(el('span', 'ono', r.o));
+    t.appendChild(pill(r.gl, stageTone(r)));
+    if (r.w) t.appendChild(pill(r.w, WINDOW_TONE[r.w]));
+    top.appendChild(t);
+    const ENDED = { Cancelled: 'cancelled', Closed: 'closed', Collected: 'collected', Completed: 'completed' };
+    const bits = r.g === 'archived'
+      ? [r.pl ? 'Ordered ' + fmtDay(r.pl) : '', r.ed ? (ENDED[r.gl] || 'sent') + ' ' + fmtDay(r.ed) : ''].filter(Boolean)
+      : ['Ordered ' + fmtDay(r.pl), r.d === 0 ? 'today' : r.d === 1 ? 'yesterday' : r.d + ' days ago'];
+    if (r.we) {
+      const past = r.d - r.wd;
+      bits.push(past > 0 ? `${past} days past the ${r.wd === 28 ? '4-week' : r.wd + '-day'} window` : 'window ends ' + fmtDay(r.we));
+    }
+    if (bits.length) top.appendChild(el('div', 'meta', bits.join(' · ')));
+    c.appendChild(top);
+
+    if (r.it.length) {
+      const ul = el('ul', 'items');
+      for (const i of r.it) {
+        const li = el('li');
+        li.appendChild(el('span', 'name', i.t + (i.q > 1 ? ' ×' + i.q : '')));
+        li.appendChild(pill(i.a, ITEM_TONE[i.a]));
+        if (i.s) li.appendChild(el('span', 'sku', i.s));
+        ul.appendChild(li);
+      }
+      c.appendChild(ul);
+    }
+
+    const dl = el('dl', 'facts');
+    fact(dl, r.g === 'po' ? 'Stock on the way' : 'Stock at', r.wh);
+    fact(dl, r.mf.length > 1 ? 'Manifests' : 'Manifest', r.mf.join(', '));
+    if (!r.mf.length && r.ds) fact(dl, 'Supplier sheet', r.ds.includes(',') ? r.ds.replace(/, (?=[^,]*$)/, ' and ') + ' drop-ship sheets' : r.ds + ' drop-ship sheet');
+    fact(dl, 'Supplier sheet says', r.ss);
+    fact(dl, 'ETA', r.eta);
+    if (r.tr.some((x) => x.n)) {
+      const box = el('div');
+      r.tr.filter((x) => x.n).forEach((x, k) => { if (k) box.appendChild(document.createElement('br')); box.appendChild(trackLink(x)); box.append(' · ' + fmtDay(x.dt)); });
+      fact(dl, DONE(r) ? 'Tracking' : 'Already sent', box);
+    } else if (r.g === 'sent' && r.tr[0]) {
+      fact(dl, 'Fulfilled', fmtDay(r.tr[0].dt));
+    }
+    if (r.st && r.st.n) fact(dl, 'Supplier tracking (' + r.st.m.toLowerCase() + ' match)', trackLink(r.st));
+    fact(dl, 'Payment', r.pay);
+    fact(dl, 'Method', r.mt && r.mt !== 'Not set' ? r.mt : '');
+    if (dl.children.length) c.appendChild(dl);
+
+    const next = el('div', 'block');
+    next.appendChild(el('h3', '', DONE(r) ? 'What Shopify shows' : 'Next step'));
+    next.appendChild(el('p', '', r.nx));
+    c.appendChild(next);
+
+    if (r.cw) {
+      const rep = el('div', 'block reply');
+      rep.appendChild(el('h3', '', 'Tell the customer'));
+      const row = el('div', 'reply-row');
+      const text = el('p', '', r.cw);
+      const copy = el('button', 'copy', 'Copy'); copy.type = 'button';
+      copy.addEventListener('click', () => {
+        const done = () => { copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1600); };
+        const fallback = () => { const range = document.createRange(); range.selectNodeContents(text); const s = getSelection(); s.removeAllRanges(); s.addRange(range); copy.textContent = 'Selected: press Ctrl+C'; };
+        try { navigator.clipboard.writeText(r.cw).then(done, fallback); } catch (e) { fallback(); }
+      });
+      row.appendChild(text); row.appendChild(copy);
+      rep.appendChild(row);
+      c.appendChild(rep);
+    }
+
+    if (r.id) {
+      const links = el('div', 'links');
+      const a = el('a', '', 'Open in Shopify'); a.href = 'https://admin.shopify.com/store/carbonetics-aero/orders/' + encodeURIComponent(r.id); a.target = '_blank'; a.rel = 'noopener';
+      links.appendChild(a);
+      c.appendChild(links);
+    }
+    return c;
+  }
+
+  $('askForm').addEventListener('submit', (e) => { e.preventDefault(); const v = $('q').value.trim(); if (!v) return; $('q').value = ''; run(v); });
+
+  // Remembered passcode: open straight away.
+  const saved = store.get();
+  if (saved) { $('remember').checked = true; unlock(saved, true); }
+})();
+</script>
+
+</body></html>
