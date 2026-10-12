@@ -233,6 +233,20 @@ a { color: var(--info); }
 /*ENGINE-START*/
 function makeEngine(data) {
   const orders = data.orders;
+  // Day counts and window labels move on every day, not only when the data refreshes: count whole Sydney calendar
+  // days from the order date (a Sydney date) to today, with the tracker's thresholds (Maxton Design due after 21
+  // days and late after 28 when any line is Maxton, everything else due after 90 and late after 120).
+  const sydToday = Date.parse(new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date()) + 'T00:00:00Z');
+  const WINDOW = ['On track', 'Due soon', 'Late', 'Over a year'];
+  for (const r of orders) {
+    if (!r.pl) continue;
+    const d = Math.round((sydToday - Date.parse(r.pl + 'T00:00:00Z')) / 86400000);
+    if (!(d >= 0)) continue;
+    r.d = d;
+    if (!r.w) continue;
+    const [due, late] = r.it.some((i) => i.v === 'Maxton Design') ? [21, 28] : [90, 120];
+    r.w = WINDOW[d > 365 ? 3 : d > late ? 2 : d > due ? 1 : 0];
+  }
   const byNum = new Map(orders.map((r) => [r.o.replace(/\D/g, ''), r]));
   const norm = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9#]+/g, ' ').trim();
   const hay = new Map(orders.map((r) => [r, ' ' + norm(r.it.map((i) => i.t + ' ' + i.s + ' ' + i.v).join(' ')) + ' ']));
@@ -248,7 +262,7 @@ function makeEngine(data) {
     { re: /\b(part(ly|ially)? arrived|partial(ly)?)\b/, test: (r) => r.g === 'part', title: 'Part arrived', sort: 'old' },
     { re: /\b(ready( to (send|ship|go|pick|collect))?|in stock|on the shelf|to pick|pick list|arrived)\b/, test: (r) => r.g === 'ready', title: 'Ready to send', sort: 'old' },
     { re: /\b(on a po|incoming|purchase orders?|arriving|po)\b/, test: (r) => r.g === 'po', title: 'Arriving on a PO', sort: 'old' },
-    { re: /\b(not on (any|a) (supplier )?sheet|no (supplier )?sheet|not ordered|never ordered)\b/, test: (r) => r.g === 'no_sheet', title: 'Not on any supplier sheet', sort: 'old' },
+    { re: /\b(not on (any|a) (supplier )?sheet|no (supplier )?sheet|not ordered|never ordered)\b/, test: (r) => r.g === 'no_sheet' || !!r.ns, title: 'Not on any supplier sheet', sort: 'old' },
     { re: /\b(new orders?|this week|placed today)\b/, test: (r) => r.d < 7 && OPEN(r), title: 'Placed in the last 7 days', sort: 'new' },
     { re: /\b(sent|shipped|dispatched|fulfilled|collected)\b/, test: (r) => r.g === 'sent', title: `Sent in the last ${RECENT} days`, sort: 'recent', scope: 'sent' },
   ];
@@ -359,7 +373,7 @@ function makeEngine(data) {
       ready: c((r) => r.g === 'ready'), po: c((r) => r.g === 'po'), part: c((r) => r.g === 'part'),
       supplier_arrived: c((r) => r.g === 'supplier_arrived'), supplier_shipped: c((r) => r.g === 'supplier_shipped'),
       late: c((r) => r.w === 'Late' || r.w === 'Over a year'), due_soon: c((r) => r.w === 'Due soon'),
-      no_sheet: c((r) => r.g === 'no_sheet'), sent: c((r) => r.g === 'sent'), open: c(OPEN), archived: c((r) => r.g === 'archived'),
+      no_sheet: c((r) => r.g === 'no_sheet' || !!r.ns), sent: c((r) => r.g === 'sent'), open: c(OPEN), archived: c((r) => r.g === 'archived'),
     };
   }
   return { ask, counts, get: (n) => byNum.get(String(n).replace(/\D/g, '')) };
@@ -379,13 +393,15 @@ function makeEngine(data) {
 
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const tz = 'Australia/Sydney';
-  const fmtDay = (iso) => (iso ? new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso.length === 10 ? iso + 'T12:00:00+10:00' : iso)) : '');
+  // How often the data refreshes: used by the staleness note and the help text.
+  const REFRESH = { when: 'on the 1st and 15th of each month', staleHours: 17 * 24 };
+  const fmtDay =(iso) => (iso ? new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso.length === 10 ? iso + 'T12:00:00+10:00' : iso)) : '');
   const fmtStamp = (iso) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 
   const STAGE_TONE = { ready: 't-good', sent: 't-good', po: 't-info', part: 't-warn', supplier_arrived: 't-warn', supplier_shipped: 't-warn', with_supplier: 't-calm', new: 't-calm', brand: 't-calm', no_sheet: 't-bad', cleanup: 't-calm' };
   const WINDOW_TONE = { 'On track': 't-good', 'Due soon': 't-warn', Late: 't-bad', 'Over a year': 't-bad' };
   const ARCHIVED_TONE = { Sent: 't-good', Collected: 't-good', Completed: 't-good', 'Check Shopify': 't-warn', 'Not in Shopify': 't-warn' };
-  const ITEM_TONE = { 'In stock': 't-good', Sent: 't-good', Covered: 't-info', 'Supplier shipped': 't-warn', Waiting: 't-calm', 'Stock not tracked': 't-calm', 'Nothing to send': 't-calm', 'Not sent': 't-calm', Cancelled: 't-calm', 'Check Shopify': 't-warn' };
+  const ITEM_TONE = { 'In stock': 't-good', Sent: 't-good', Covered: 't-info', 'Supplier shipped': 't-warn', Waiting: 't-calm', 'Not on a sheet': 't-bad', 'Stock not tracked': 't-calm', 'Nothing to send': 't-calm', 'Not sent': 't-calm', Cancelled: 't-calm', 'Check Shopify': 't-warn' };
   const pill = (text, tone) => el('span', 'pill ' + (tone || 't-calm'), text);
   const stageTone = (r) => (r.g === 'archived' ? ARCHIVED_TONE[r.gl] || 't-calm' : STAGE_TONE[r.g]);
   const DONE = (r) => r.g === 'sent' || r.g === 'archived';
@@ -450,7 +466,7 @@ function makeEngine(data) {
     $('fresh').textContent = 'Updated ' + fmtStamp(at);
     const ageH = (Date.now() - Date.parse(at)) / 3600000;
     const notes = [];
-    if (ageH > 17 * 24) notes.push(`This data is from ${fmtStamp(at)}. It's meant to refresh on the 1st and 15th of each month, so the last refresh may not have run. Let Long know.`);
+    if (ageH > REFRESH.staleHours) notes.push(`This data is from ${fmtStamp(at)}. It's meant to refresh ${REFRESH.when}, so the last refresh may not have run. Let Long know.`);
     if (data.meta.missing && data.meta.missing.length) notes.push('Some supplier sheets couldn\'t be read in the last refresh (' + data.meta.missing.join(', ') + '), so manifest details may be missing.');
     $('banner').hidden = !notes.length; $('banner').textContent = notes.join(' ');
     const quick = $('quick'); quick.textContent = '';
@@ -555,7 +571,7 @@ function makeEngine(data) {
       ['A tracking number', 'any tracking number Shopify or a supplier sheet has'],
     ].forEach(([a, b]) => { const li = el('li'); li.appendChild(el('strong', '', a + ': ')); li.append(b); ul.appendChild(li); });
     box.appendChild(ul);
-    box.appendChild(el('p', 'say', `Answers come from Shopify and the supplier sheets as at the date shown at the top. The desk holds every Shopify order. Each refresh, on the 1st and 15th of each month, re-checks open orders and anything changed in the last ${data.meta.recent_days || 60} days; older orders keep their last known status. Check Shopify for anything that may have changed since. The desk never guesses a date: when there is no arrival date on file, it says so. Customer details are left out, so ask customers for their order number.`));
+    box.appendChild(el('p', 'say', `Answers come from Shopify and the supplier sheets as at the date shown at the top. The desk holds every Shopify order. Each refresh, ${REFRESH.when}, re-checks open orders and anything changed in the last ${data.meta.recent_days || 60} days; older orders keep their last known status. Check Shopify for anything that may have changed since. The desk never guesses a date: when there is no arrival date on file, it says so. Customer details are left out, so ask customers for their order number.`));
     post(box);
   }
 
@@ -617,6 +633,7 @@ function makeEngine(data) {
     const t = el('div', 'card-title');
     t.appendChild(el('span', 'ono', r.o));
     t.appendChild(pill(r.gl, stageTone(r)));
+    if (r.ns) t.appendChild(pill('Rest not on a sheet', 't-bad'));
     if (r.w) t.appendChild(pill(r.w, WINDOW_TONE[r.w]));
     top.appendChild(t);
     const ENDED = { Cancelled: 'cancelled', Closed: 'closed', Collected: 'collected', Completed: 'completed' };
