@@ -202,7 +202,7 @@ a { color: var(--info); }
         <p class="eyebrow">Example answer</p>
         <article class="card example" aria-label="Example answer">
           <div class="card-top">
-            <div class="card-title"><span class="ono">#11xxx</span><span class="pill t-calm">With supplier</span><span class="pill t-good">On track</span></div>
+            <div class="card-title"><span class="ono">#11xxx</span><span class="pill t-calm">With the factory</span><span class="pill t-good">On track</span></div>
             <div class="meta">Ordered 16 Aug 2026 · 54 days ago · window ends 13 Dec 2026</div>
           </div>
           <ul class="items"><li><span class="name">GT Style Rear Spoiler For Toyota GR Yaris (Carbon Fibre)</span><span class="pill t-calm">Waiting</span><span class="sku">EXAMPLE-SKU</span></li></ul>
@@ -234,6 +234,26 @@ a { color: var(--info); }
 /*ENGINE-START*/
 function makeEngine(data) {
   const orders = data.orders;
+  // What staff see (Long, 13 Oct 2026): KZT is called Z, like its Z56 bins; suppliers are called the factory; and
+  // the desk never says "drop-ship". The data job still writes the sheets' own names; the page rewords them once, as it loads.
+  const PLAIN = [
+    [/\bKZT's sheet\b/g, 'the Z sheet'],
+    [/\b(?:Drop-ship with|With) supplier\b/g, 'With the factory'],
+    [/\bdrop[- ]?ship (rows?)\b/gi, 'sheet $1'],
+    [/\bdrop[- ]?ship (sheets?)\b/gi, '$1'],
+    [/\bdrop[- ]?ship(?:ping|ped|s)?\s*/gi, ''],
+    [/\bKZT\b/g, 'Z'],
+    [/\bsuppliers\b/g, 'factories'], [/\bSuppliers\b/g, 'Factories'],
+    [/\bsupplier\b/g, 'factory'], [/\bSupplier\b/g, 'Factory'],
+    [/\bA E sheet row\b/g, 'An E sheet row'],
+    [/(^|[.!?]\s+)the Z sheet\b/g, '$1The Z sheet'],
+  ];
+  const plain = (s) => (typeof s === 'string' && s ? PLAIN.reduce((x, [re, to]) => x.replace(re, to), s) : s);
+  for (const r of orders) {
+    r.gl = plain(r.gl); r.nx = plain(r.nx); r.ss = plain(r.ss); r.ds = plain(r.ds); r.eta = plain(r.eta);
+    if (Array.isArray(r.mf)) r.mf = r.mf.map(plain);
+    for (const i of r.it || []) i.a = plain(i.a);
+  }
   // Day counts and window labels move on every day, not only when the data refreshes: count whole Sydney calendar
   // days from the order date (a Sydney date) to today, with the tracker's thresholds (Maxton Design due after 21
   // days and late after 28 when any line is Maxton, everything else due after 90 and late after 120).
@@ -258,12 +278,12 @@ function makeEngine(data) {
   const manifests = new Set(orders.flatMap((r) => r.mf));
   const LISTS = [
     { re: /\b(not counted|clean ?up|nothing left|close in shopify)\b/, test: (r) => r.g === 'cleanup', title: 'Open but not counted', sort: 'old', scope: 'all' },
-    { re: /\b(supplier (has )?(shipped|sent)|drop ?ship(ped)? tracking|add tracking|tracking not in shopify)\b/, test: (r) => r.g === 'supplier_shipped', title: 'Shipped by a supplier, tracking not in Shopify yet', sort: 'old' },
-    { re: /\b(supplier says arrived|says arrived|kzt arrived|receive the po)\b/, test: (r) => r.g === 'supplier_arrived', title: 'Supplier says arrived, not in Shopify yet', sort: 'old' },
+    { re: /\b((?:supplier|factory) (has )?(shipped|sent)|drop ?ship(ped)? tracking|add tracking|tracking not in shopify)\b/, test: (r) => r.g === 'supplier_shipped', title: 'Shipped by the factory, tracking not in Shopify yet', sort: 'old' },
+    { re: /\b((?:supplier|factory) says arrived|says arrived|kzt arrived|z arrived|receive the po)\b/, test: (r) => r.g === 'supplier_arrived', title: 'Factory says arrived, not in Shopify yet', sort: 'old' },
     { re: /\b(part(ly|ially)? arrived|partial(ly)?)\b/, test: (r) => r.g === 'part', title: 'Part arrived', sort: 'old' },
     { re: /\b(ready( to (send|ship|go|pick|collect))?|in stock|on the shelf|to pick|pick list|arrived)\b/, test: (r) => r.g === 'ready', title: 'Ready to send', sort: 'old' },
     { re: /\b(on a po|incoming|purchase orders?|arriving|po)\b/, test: (r) => r.g === 'po', title: 'Arriving on a PO', sort: 'old' },
-    { re: /\b(not on (any|a) (supplier )?sheet|no (supplier )?sheet|not ordered|never ordered)\b/, test: (r) => r.g === 'no_sheet' || !!r.ns, title: 'Not on any supplier sheet', sort: 'old' },
+    { re: /\b(not on (any|a) ((?:supplier|factory) )?sheet|no ((?:supplier|factory) )?sheet|not ordered|never ordered)\b/, test: (r) => r.g === 'no_sheet' || !!r.ns, title: 'Not on any factory sheet', sort: 'old' },
     { re: /\b(new orders?|this week|placed today)\b/, test: (r) => r.d < 7 && OPEN(r), title: 'Placed in the last 7 days', sort: 'new' },
     { re: /\b(sent|shipped|dispatched|fulfilled|collected)\b/, test: (r) => r.g === 'sent', title: `Sent in the last ${RECENT} days`, sort: 'recent', scope: 'sent' },
   ];
@@ -323,14 +343,17 @@ function makeEngine(data) {
     let scope = 'open';
 
     // A manifest, if one by that name exists.
-    // K15, N10 (E's orders) and Z56 (KZT batches), the same names as the warehouse bins.
+    // K15, N10 (E's orders) and Z56 (Z's batches), the same names as the warehouse bins.
     const km = q.match(/\b(k|e|z)\s*(?:order|record)?\s*#?\s*(\d{1,2})\b/) || q.match(/\b(n)(\d{1,2})\b/);
     if (km) {
       const label = ({ k: 'K', e: 'N', n: 'N', z: 'Z' })[km[1]] + km[2];
       if (manifests.has(label)) { filters.push((r) => r.mf.includes(label)); titles.push('On ' + label); rest = rest.replace(km[0], ' '); }
     }
-    if (/\bkzt\b/.test(rest) && !/\bkzt arrived\b/.test(rest)) {
-      filters.push((r) => r.mf.some((m) => /^Z\d+$/.test(m) || m === 'KZT Main Order Sheet') || /\bKZT\b/.test(r.ds)); titles.push('With KZT'); rest = rest.replace(/\bkzt\b/, ' ');
+    // Everything with Z: its batches (Z56…) and its own sheet. "kzt" still works as a search word.
+    const Z_ALL = /\b(?:kzt|all z|z (?:orders?|sheets?|batch(?:es)?|manifests?))\b/;
+    if ((Z_ALL.test(rest) || rest.trim() === 'z') && !/\b(?:kzt|z) arrived\b/.test(rest)) {
+      filters.push((r) => r.mf.some((m) => /^Z\d+$/.test(m) || m === 'Z Main Order Sheet') || /\bZ\b/.test(r.ds)); titles.push('Z orders');
+      rest = rest.trim() === 'z' ? ' ' : rest.replace(Z_ALL, ' ');
     }
     let wide = false;
     if (WIDE.test(rest)) { wide = true; rest = strip(rest, WIDE); }
@@ -402,7 +425,7 @@ function makeEngine(data) {
   const STAGE_TONE = { ready: 't-good', sent: 't-good', po: 't-info', part: 't-warn', supplier_arrived: 't-warn', supplier_shipped: 't-warn', with_supplier: 't-calm', new: 't-calm', brand: 't-calm', no_sheet: 't-bad', cleanup: 't-calm' };
   const WINDOW_TONE = { 'On track': 't-good', 'Due soon': 't-warn', Late: 't-bad', 'Over a year': 't-bad' };
   const ARCHIVED_TONE = { Sent: 't-good', Collected: 't-good', Completed: 't-good', 'Check Shopify': 't-warn', 'Not in Shopify': 't-warn' };
-  const ITEM_TONE = { 'In stock': 't-good', Sent: 't-good', Covered: 't-info', 'Supplier shipped': 't-warn', Waiting: 't-calm', 'Not on a sheet': 't-bad', 'Stock not tracked': 't-calm', 'Nothing to send': 't-calm', 'Not sent': 't-calm', Cancelled: 't-calm', 'Check Shopify': 't-warn' };
+  const ITEM_TONE = { 'In stock': 't-good', Sent: 't-good', Covered: 't-info', 'Factory shipped': 't-warn', Waiting: 't-calm', 'Not on a sheet': 't-bad', 'Stock not tracked': 't-calm', 'Nothing to send': 't-calm', 'Not sent': 't-calm', Cancelled: 't-calm', 'Check Shopify': 't-warn' };
   const pill = (text, tone) => el('span', 'pill ' + (tone || 't-calm'), text);
   const stageTone = (r) => (r.g === 'archived' ? ARCHIVED_TONE[r.gl] || 't-calm' : STAGE_TONE[r.g]);
   const DONE = (r) => r.g === 'sent' || r.g === 'archived';
@@ -458,8 +481,8 @@ function makeEngine(data) {
 
   // ----- desk -----
   const QUICK = [
-    ['Ready to send', 'ready to send'], ['Late orders', 'late orders'], ['Due soon', 'due soon'], ['Supplier says arrived', 'supplier says arrived'],
-    ['Not on any sheet', 'not on any supplier sheet'], ['Sent recently', 'sent'], ['Help', 'help'],
+    ['Ready to send', 'ready to send'], ['Late orders', 'late orders'], ['Due soon', 'due soon'], ['Factory says arrived', 'factory says arrived'],
+    ['Not on any sheet', 'not on any factory sheet'], ['Sent recently', 'sent'], ['Help', 'help'],
   ];
   function openDesk() {
     $('lock').hidden = true; $('desk').hidden = false; $('composer').hidden = false; $('lockBtn').hidden = false;
@@ -468,7 +491,8 @@ function makeEngine(data) {
     const ageH = (Date.now() - Date.parse(at)) / 3600000;
     const notes = [];
     if (ageH > REFRESH.staleHours) notes.push(`This data is from ${fmtStamp(at)}. It's meant to refresh ${REFRESH.when}, so the last refresh may not have run. Let Long know.`);
-    if (data.meta.missing && data.meta.missing.length) notes.push('Some supplier sheets couldn\'t be read in the last refresh (' + data.meta.missing.join(', ') + '), so manifest details may be missing.');
+    const SHEET_NAME = { 'New Drop Ship 2025': 'K sheet', 'International LCL Price': 'K LCL sheet', 'E Order Dropship': 'E sheet', 'Drop Ship Order': 'Z sheet', 'KZT Main Order Sheet': 'Z manifests' };
+    if (data.meta.missing && data.meta.missing.length) notes.push('Some factory sheets couldn\'t be read in the last refresh (' + data.meta.missing.map((s) => SHEET_NAME[s] || String(s).replace(/\bKZT\b/g, 'Z').replace(/\bdrop[- ]?ship\s*/gi, '')).join(', ') + '), so manifest details may be missing.');
     $('banner').hidden = !notes.length; $('banner').textContent = notes.join(' ');
     const quick = $('quick'); quick.textContent = '';
     for (const [label, query] of QUICK) { const b = el('button', 'chip', label); b.type = 'button'; b.addEventListener('click', () => run(query)); quick.appendChild(b); }
@@ -491,11 +515,11 @@ function makeEngine(data) {
     add('Ready to send', c.ready, 'ready to send');
     add('Arriving on a PO', c.po, 'on a po');
     add('Part arrived', c.part, 'part arrived');
-    add('Supplier says arrived', c.supplier_arrived, 'supplier says arrived');
-    if (c.supplier_shipped) add('Supplier shipped, not in Shopify', c.supplier_shipped, 'supplier shipped');
+    add('Factory says arrived', c.supplier_arrived, 'factory says arrived');
+    if (c.supplier_shipped) add('Factory shipped, not in Shopify', c.supplier_shipped, 'factory shipped');
     add('Past their window', c.late, 'late orders');
     add('Due soon', c.due_soon, 'due soon');
-    add('Not on any supplier sheet', c.no_sheet, 'not on any supplier sheet');
+    add('Not on any factory sheet', c.no_sheet, 'not on any factory sheet');
     add(`Sent in the last ${data.meta.recent_days || 30} days`, c.sent, 'sent');
     box.appendChild(chips);
     post(box);
@@ -565,14 +589,14 @@ function makeEngine(data) {
     [
       ['An order', '11723, #11723, or several at once. Any order works, open or past'],
       ['A product', 'R34 spoiler, GT86 fender, Maxton'],
-      ['A manifest', 'K15, N10, Z56, or KZT for all of KZT'],
+      ['A manifest', 'K15, N10, Z56, or “all Z” for every Z order'],
       ['Sent and closed orders too', 'add “including sent and closed”, as in K15 including sent and closed'],
-      ['A list', 'ready to send, on a PO, part arrived, late orders, due soon, over a year, not on any supplier sheet, sent'],
+      ['A list', 'ready to send, on a PO, part arrived, late orders, due soon, over a year, not on any factory sheet, sent'],
       ['Mix them', 'late R34 orders, ready pickups, K15 late'],
-      ['A tracking number', 'any tracking number Shopify or a supplier sheet has'],
+      ['A tracking number', 'any tracking number Shopify or a factory sheet has'],
     ].forEach(([a, b]) => { const li = el('li'); li.appendChild(el('strong', '', a + ': ')); li.append(b); ul.appendChild(li); });
     box.appendChild(ul);
-    box.appendChild(el('p', 'say', `Answers come from Shopify and the supplier sheets as at the date shown at the top. The desk holds every Shopify order. Each refresh, ${REFRESH.when}, re-checks open orders and anything changed in the last ${data.meta.recent_days || 60} days; older orders keep their last known status. Check Shopify for anything that may have changed since. The desk never guesses a date: when there is no arrival date on file, it says so. Customer details are left out, so ask customers for their order number.`));
+    box.appendChild(el('p', 'say', `Answers come from Shopify and the factory sheets as at the date shown at the top. The desk holds every Shopify order. Each refresh, ${REFRESH.when}, re-checks open orders and anything changed in the last ${data.meta.recent_days || 60} days; older orders keep their last known status. Check Shopify for anything that may have changed since. The desk never guesses a date: when there is no arrival date on file, it says so. Customer details are left out, so ask customers for their order number.`));
     post(box);
   }
 
@@ -703,8 +727,8 @@ function makeEngine(data) {
     const dl = el('dl', 'facts');
     fact(dl, r.g === 'po' ? 'Stock on the way' : 'Stock at', r.wh);
     fact(dl, r.mf.length > 1 ? 'Manifests' : 'Manifest', r.mf.join(', '));
-    if (!r.mf.length && r.ds) fact(dl, 'Supplier sheet', r.ds.includes(',') ? r.ds.replace(/, (?=[^,]*$)/, ' and ') + ' drop-ship sheets' : r.ds + ' drop-ship sheet');
-    fact(dl, 'Supplier sheet says', r.ss);
+    if (!r.mf.length && r.ds) fact(dl, 'Factory sheet', r.ds.replace(/, (?=[^,]*$)/, ' and '));
+    fact(dl, 'Factory sheet says', r.ss);
     fact(dl, 'ETA', r.eta);
     if (r.tr.some((x) => x.n)) {
       const box = el('div');
@@ -713,7 +737,7 @@ function makeEngine(data) {
     } else if (r.g === 'sent' && r.tr[0]) {
       fact(dl, 'Fulfilled', fmtDay(r.tr[0].dt));
     }
-    if (r.st && r.st.n) fact(dl, 'Supplier tracking (' + r.st.m.toLowerCase() + ' match)', trackLink(r.st));
+    if (r.st && r.st.n) fact(dl, 'Factory tracking (' + r.st.m.toLowerCase() + ' match)', trackLink(r.st));
     fact(dl, 'Payment', r.pay);
     fact(dl, 'Method', r.mt && r.mt !== 'Not set' ? r.mt : '');
     if (dl.children.length) c.appendChild(dl);
