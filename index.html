@@ -134,6 +134,7 @@ main { flex: 1; width: 100%; max-width: 920px; margin: 0 auto; padding-block: 20
 .reply-row p { flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
 .copy { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 5px 12px; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
 .copy:hover { border-color: var(--muted); }
+.toast { position: fixed; left: 50%; bottom: calc(118px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 7; width: max-content; max-width: min(520px, calc(100vw - 32px)); background: var(--button); color: var(--button-ink); border-radius: 8px; padding: 9px 14px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
 .links { display: flex; gap: 16px; flex-wrap: wrap; padding: 10px 18px 14px; font-size: 14px; }
 a { color: var(--info); }
 
@@ -619,10 +620,50 @@ function makeEngine(data) {
     if (value instanceof Node) dd.appendChild(value); else dd.textContent = value;
     d.appendChild(dd); dl.appendChild(d);
   }
+  // Tracking links search the number. Shopify's link already holds it for most carriers; these carriers' sites take
+  // it in the address, so their link is rebuilt with it.
+  const SEARCH_LINK = [
+    { test: (t) => /ezyfms\.com/i.test(t.u), href: (n) => 'https://www.ezyfms.com/tfm/Tracker.asp?CN=' + encodeURIComponent(n) },
+    { test: (t) => /17track\.net/i.test(t.u), href: (n) => 'https://t.17track.net/en#nums=' + encodeURIComponent(n) },
+  ];
+  // Carriers whose site can't take the number in the address: the link opens their tracking page and copies the
+  // number to paste in. Allied Express also asks for the delivery postcode.
+  const TRACK_PAGE = [
+    { test: (t) => /alliedexpress\.com\.au/i.test(t.u || '') || /^allied/i.test(t.c || ''), href: 'https://www.alliedexpress.com.au/services/track-trace/', note: 'Allied also asks for the delivery postcode, which is on the order in Shopify.' },
+  ];
+  // Allied Express finds a consignment only with its delivery postcode, which the data keeps on Allied rows (pc).
+  const alliedResult = (n, pc) => 'https://secure-neptune.alliedexpress.com.au/iTrack/search.do?sig=0C5E96954FB23091E0E4A795C8063C67&tno='
+    + encodeURIComponent(n) + '&ono=&searchType=con&doc=' + encodeURIComponent(n) + '&dpc=' + encodeURIComponent(pc);
+  const trackTarget = (t) => {
+    const n = String(t.n || '');
+    if (t.pc && (/alliedexpress\.com\.au/i.test(t.u || '') || /^allied/i.test(t.c || ''))) return { href: alliedResult(n, t.pc), copy: false };
+    if (!t.u) return { href: 'https://t.17track.net/en#nums=' + encodeURIComponent(n), copy: false };
+    if (t.u.toUpperCase().includes(n.toUpperCase())) return { href: t.u, copy: false };
+    const s = SEARCH_LINK.find((x) => x.test(t));
+    if (s) return { href: s.href(n), copy: false };
+    const p = TRACK_PAGE.find((x) => x.test(t));
+    return p ? { href: p.href, copy: true, note: p.note } : { href: t.u, copy: true, note: '' };
+  };
+  let toastTimer = 0;
+  const toast = (msg) => {
+    let box = $('toast');
+    if (!box) { box = el('div', 'toast'); box.id = 'toast'; box.setAttribute('role', 'status'); document.body.appendChild(box); }
+    box.textContent = msg; box.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { box.hidden = true; }, 7000);
+  };
   const trackLink = (t) => {
     const s = el('span');
     if (t.c && t.c !== 'Other') s.append(t.c + ' ');
-    const a = el('a', 'mono', t.n); a.href = t.u; a.target = '_blank'; a.rel = 'noopener';
+    const go = trackTarget(t);
+    const a = el('a', 'mono', t.n); a.href = go.href; a.target = '_blank'; a.rel = 'noopener';
+    if (go.copy) {
+      a.title = "Copies the tracking number and opens the carrier's tracking page";
+      a.addEventListener('click', () => {
+        const tail = go.note ? ' ' + go.note : '';
+        const paste = () => toast(`Paste ${t.n} into the carrier's search.` + tail);
+        try { navigator.clipboard.writeText(t.n).then(() => toast(`${t.n} copied: paste it into the carrier's search.` + tail), paste); } catch (e) { paste(); }
+      });
+    }
     s.appendChild(a);
     return s;
   };
@@ -682,16 +723,22 @@ function makeEngine(data) {
     next.appendChild(el('p', '', r.nx));
     c.appendChild(next);
 
-    if (r.cw) {
+    // The customer wording carries the same tracking links as the card.
+    const cw = (r.tr || []).reduce((txt, x) => {
+      if (!x.n || !x.u) return txt;
+      const h = trackTarget(x).href;
+      return h === x.u ? txt : txt.split(x.u).join(h);
+    }, r.cw || '');
+    if (cw) {
       const rep = el('div', 'block reply');
       rep.appendChild(el('h3', '', 'Tell the customer'));
       const row = el('div', 'reply-row');
-      const text = el('p', '', r.cw);
+      const text = el('p', '', cw);
       const copy = el('button', 'copy', 'Copy'); copy.type = 'button';
       copy.addEventListener('click', () => {
         const done = () => { copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1600); };
         const fallback = () => { const range = document.createRange(); range.selectNodeContents(text); const s = getSelection(); s.removeAllRanges(); s.addRange(range); copy.textContent = 'Selected: press Ctrl+C'; };
-        try { navigator.clipboard.writeText(r.cw).then(done, fallback); } catch (e) { fallback(); }
+        try { navigator.clipboard.writeText(cw).then(done, fallback); } catch (e) { fallback(); }
       });
       row.appendChild(text); row.appendChild(copy);
       rep.appendChild(row);
