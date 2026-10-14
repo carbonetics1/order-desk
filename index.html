@@ -236,7 +236,13 @@ function makeEngine(data) {
   const orders = data.orders;
   // What staff see (Long, 13 Oct 2026): KZT is called Z, like its Z56 bins; suppliers are called the factory; and
   // the desk never says "drop-ship". The data job still writes the sheets' own names; the page rewords them once, as it loads.
+  // Z's sheet saying "Arrived" means the part is made and waiting at the international warehouse, not that it has
+  // reached Australia (Long, 15 Oct 2026), so those orders get their own wording and nothing to receive.
   const PLAIN = [
+    [/\bKZT's sheet says this has arrived, but (?:Shopify has no stock or PO for it yet|the Shopify stock for it is going to older orders first)\. Ask the warehouse to receive it in Shopify\./g,
+      "Completed and waiting at our international warehouse. It hasn't landed in Australia yet, so there's nothing to receive here. To the customer, it's past the halfway point and in the final stages of production."],
+    [/\bSupplier says arrived\b/g, 'Completed, at international warehouse'],
+    [/\bKZT Arrived\b/g, 'Z completed, at international warehouse'],
     [/\bKZT's sheet\b/g, 'the Z sheet'],
     [/\b(?:Drop-ship with|With) supplier\b/g, 'With the factory'],
     [/\bdrop[- ]?ship (rows?)\b/gi, 'sheet $1'],
@@ -248,11 +254,16 @@ function makeEngine(data) {
     [/\bA E sheet row\b/g, 'An E sheet row'],
     [/(^|[.!?]\s+)the Z sheet\b/g, '$1The Z sheet'],
   ];
+  const INTL_BEFORE = "Your part is on its way to our warehouse. Once it arrives and passes our quality check, we'll send it out and share tracking with you.";
+  // Customers see the time from the international warehouse to us as part of production (Long, 15 Oct 2026).
+  const INTL_AFTER = (mt) => "Good news, your order is past the halfway point and has moved into the final stages of production. We'll keep you posted and "
+    + (mt === 'Pickup' ? "let you know as soon as it's ready to collect." : mt === 'Install' ? "be in touch to book in your install once it's ready." : "send tracking as soon as it's on its way.");
   const plain = (s) => (typeof s === 'string' && s ? PLAIN.reduce((x, [re, to]) => x.replace(re, to), s) : s);
   for (const r of orders) {
     r.gl = plain(r.gl); r.nx = plain(r.nx); r.ss = plain(r.ss); r.ds = plain(r.ds); r.eta = plain(r.eta);
     if (Array.isArray(r.mf)) r.mf = r.mf.map(plain);
     for (const i of r.it || []) i.a = plain(i.a);
+    if (r.g === 'supplier_arrived' && r.cw === INTL_BEFORE) r.cw = INTL_AFTER(r.mt);
   }
   // Day counts and window labels move on every day, not only when the data refreshes: count whole Sydney calendar
   // days from the order date (a Sydney date) to today, with the tracker's thresholds (Maxton Design due after 21
@@ -279,10 +290,10 @@ function makeEngine(data) {
   const LISTS = [
     { re: /\b(not counted|clean ?up|nothing left|close in shopify)\b/, test: (r) => r.g === 'cleanup', title: 'Open but not counted', sort: 'old', scope: 'all' },
     { re: /\b((?:supplier|factory) (has )?(shipped|sent)|drop ?ship(ped)? tracking|add tracking|tracking not in shopify)\b/, test: (r) => r.g === 'supplier_shipped', title: 'Shipped by the factory, tracking not in Shopify yet', sort: 'old' },
-    { re: /\b((?:supplier|factory) says arrived|says arrived|kzt arrived|z arrived|receive the po)\b/, test: (r) => r.g === 'supplier_arrived', title: 'Factory says arrived, not in Shopify yet', sort: 'old' },
+    { re: /\b((?:supplier|factory) says arrived|says arrived|kzt arrived|z arrived|(?:international|intl) warehouse)\b/, test: (r) => r.g === 'supplier_arrived', title: 'Completed, at international warehouse', sort: 'old' },
     { re: /\b(part(ly|ially)? arrived|partial(ly)?)\b/, test: (r) => r.g === 'part', title: 'Part arrived', sort: 'old' },
     { re: /\b(ready( to (send|ship|go|pick|collect))?|in stock|on the shelf|to pick|pick list|arrived)\b/, test: (r) => r.g === 'ready', title: 'Ready to send', sort: 'old' },
-    { re: /\b(on a po|incoming|purchase orders?|arriving|po)\b/, test: (r) => r.g === 'po', title: 'Arriving on a PO', sort: 'old' },
+    { re: /\b(on a po|receive (?:the |a )?po|incoming|purchase orders?|arriving|po)\b/, test: (r) => r.g === 'po', title: 'Arriving on a PO', sort: 'old' },
     { re: /\b(not on (any|a) ((?:supplier|factory) )?sheet|no ((?:supplier|factory) )?sheet|not ordered|never ordered)\b/, test: (r) => r.g === 'no_sheet' || !!r.ns, title: 'Not on any factory sheet', sort: 'old' },
     { re: /\b(new orders?|this week|placed today)\b/, test: (r) => r.d < 7 && OPEN(r), title: 'Placed in the last 7 days', sort: 'new' },
     { re: /\b(sent|shipped|dispatched|fulfilled|collected)\b/, test: (r) => r.g === 'sent', title: `Sent in the last ${RECENT} days`, sort: 'recent', scope: 'sent' },
@@ -422,7 +433,7 @@ function makeEngine(data) {
   const fmtDay =(iso) => (iso ? new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso.length === 10 ? iso + 'T12:00:00+10:00' : iso)) : '');
   const fmtStamp = (iso) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 
-  const STAGE_TONE = { ready: 't-good', sent: 't-good', po: 't-info', part: 't-warn', supplier_arrived: 't-warn', supplier_shipped: 't-warn', with_supplier: 't-calm', new: 't-calm', brand: 't-calm', no_sheet: 't-bad', cleanup: 't-calm' };
+  const STAGE_TONE = { ready: 't-good', sent: 't-good', po: 't-info', part: 't-warn', supplier_arrived: 't-info', supplier_shipped: 't-warn', with_supplier: 't-calm', new: 't-calm', brand: 't-calm', no_sheet: 't-bad', cleanup: 't-calm' };
   const WINDOW_TONE = { 'On track': 't-good', 'Due soon': 't-warn', Late: 't-bad', 'Over a year': 't-bad' };
   const ARCHIVED_TONE = { Sent: 't-good', Collected: 't-good', Completed: 't-good', 'Check Shopify': 't-warn', 'Not in Shopify': 't-warn' };
   const ITEM_TONE = { 'In stock': 't-good', Sent: 't-good', Covered: 't-info', 'Factory shipped': 't-warn', Waiting: 't-calm', 'Not on a sheet': 't-bad', 'Stock not tracked': 't-calm', 'Nothing to send': 't-calm', 'Not sent': 't-calm', Cancelled: 't-calm', 'Check Shopify': 't-warn' };
@@ -481,7 +492,7 @@ function makeEngine(data) {
 
   // ----- desk -----
   const QUICK = [
-    ['Ready to send', 'ready to send'], ['Late orders', 'late orders'], ['Due soon', 'due soon'], ['Factory says arrived', 'factory says arrived'],
+    ['Ready to send', 'ready to send'], ['Late orders', 'late orders'], ['Due soon', 'due soon'], ['At international warehouse', 'international warehouse'],
     ['Not on any sheet', 'not on any factory sheet'], ['Sent recently', 'sent'], ['Help', 'help'],
   ];
   function openDesk() {
@@ -515,7 +526,7 @@ function makeEngine(data) {
     add('Ready to send', c.ready, 'ready to send');
     add('Arriving on a PO', c.po, 'on a po');
     add('Part arrived', c.part, 'part arrived');
-    add('Factory says arrived', c.supplier_arrived, 'factory says arrived');
+    add('At international warehouse', c.supplier_arrived, 'international warehouse');
     if (c.supplier_shipped) add('Factory shipped, not in Shopify', c.supplier_shipped, 'factory shipped');
     add('Past their window', c.late, 'late orders');
     add('Due soon', c.due_soon, 'due soon');
