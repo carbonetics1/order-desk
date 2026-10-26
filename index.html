@@ -355,9 +355,13 @@ function makeEngine(data) {
 
     // A manifest, if one by that name exists.
     // K15, N10 (E's orders) and Z56 (Z's batches), the same names as the warehouse bins.
-    const km = q.match(/\b(k|e|z)\s*(?:order|record)?\s*#?\s*(\d{1,2})\b/) || q.match(/\b(n)(\d{1,2})\b/);
+    // S38 is the S sheet's container JYAUDS38, and "Direct S" its direct LCL orders (Long, 19 Oct 2026).
+    if (/\bdirect s\b/.test(rest)) { filters.push((r) => r.mf.includes('Direct S')); titles.push('On Direct S'); rest = rest.replace(/\bdirect s\b/, ' '); }
+    const S_ALL = /\b(?:all s|s (?:orders?|sheets?|containers?|manifests?))\b/;
+    if (S_ALL.test(rest)) { filters.push((r) => r.mf.some((m) => /^S\d/.test(m) || m === 'Direct S')); titles.push('S orders'); rest = rest.replace(S_ALL, ' '); }
+    const km = rest.match(/\b(k|e|z|s)\s*(?:order|record)?\s*#?\s*(\d{1,2})\b/) || rest.match(/\b(n)(\d{1,2})\b/);
     if (km) {
-      const label = ({ k: 'K', e: 'N', n: 'N', z: 'Z' })[km[1]] + km[2];
+      const label = ({ k: 'K', e: 'N', n: 'N', z: 'Z', s: 'S' })[km[1]] + km[2];
       if (manifests.has(label)) { filters.push((r) => r.mf.includes(label)); titles.push('On ' + label); rest = rest.replace(km[0], ' '); }
     }
     // Everything with Z: its batches (Z56…) and its own sheet. "kzt" still works as a search word.
@@ -517,7 +521,7 @@ function makeEngine(data) {
     const p = el('p', 'say');
     p.append('Ask me about any order, open or past. Type an order number like ');
     p.append(el('span', 'mono', '11723'));
-    p.append(', a product like “R34 spoiler”, a manifest like “K15”, “N10” or “Z56”, or a list. Right now there are ');
+    p.append(', a product like “R34 spoiler”, a manifest like “K15”, “N10”, “Z56” or “S38”, or a list. Right now there are ');
     p.append(el('strong', '', c.open.toLocaleString('en-AU') + ' open orders'));
     p.append(` out of ${(data.meta.on_desk || data.orders.length).toLocaleString('en-AU')} in all.`);
     box.appendChild(p);
@@ -536,11 +540,22 @@ function makeEngine(data) {
     post(box);
   }
 
+  // After each question, bring its answer into view: the question goes to the top of the screen with the answer
+  // below it, or, when the answer is short, the page scrolls to the bottom. This waits a frame so the answer is on
+  // the page first; scrolling straight away left the answer below the screen.
+  let scrollTo = null;
   function post(node, mine) {
     const li = el('li', 'msg' + (mine ? ' me' : ''));
     li.appendChild(node);
     $('log').appendChild(li);
-    if (mine) li.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    if (mine) {
+      scrollTo = li;
+      requestAnimationFrame(() => {
+        if (scrollTo !== li) return;
+        scrollTo = null;
+        li.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      });
+    }
     return li;
   }
   function say(text) { const box = el('div', 'bot'); box.appendChild(el('p', 'say', text)); post(box); }
@@ -600,7 +615,7 @@ function makeEngine(data) {
     [
       ['An order', '11723, #11723, or several at once. Any order works, open or past'],
       ['A product', 'R34 spoiler, GT86 fender, Maxton'],
-      ['A manifest', 'K15, N10, Z56, or “all Z” for every Z order'],
+      ['A manifest', 'K15, N10, Z56, S38 or “Direct S”, or “all Z” / “all S” for every Z or S order'],
       ['Sent and closed orders too', 'add “including sent and closed”, as in K15 including sent and closed'],
       ['A list', 'ready to send, on a PO, part arrived, late orders, due soon, over a year, not on any factory sheet, sent'],
       ['Mix them', 'late R34 orders, ready pickups, K15 late'],
