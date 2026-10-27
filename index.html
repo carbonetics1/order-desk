@@ -433,7 +433,7 @@ function makeEngine(data) {
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
   const tz = 'Australia/Sydney';
   // How often the data refreshes: used by the staleness note and the help text.
-  const REFRESH = { when: 'on the 1st and 15th of each month', staleHours: 17 * 24 };
+  const REFRESH = { when: 'every Sunday morning', staleHours: 8 * 24 };
   const fmtDay =(iso) => (iso ? new Intl.DateTimeFormat('en-AU', { timeZone: tz, day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso.length === 10 ? iso + 'T12:00:00+10:00' : iso)) : '');
   const fmtStamp = (iso) => new Intl.DateTimeFormat('en-AU', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 
